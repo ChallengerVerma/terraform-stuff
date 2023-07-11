@@ -1,0 +1,90 @@
+resource "aws_lb" "example_alb" {
+  name               = "example-alb"
+  subnets            = ["subnet-12345678", "subnet-87654321"]
+  security_groups    = ["sg-12345678"]
+  load_balancer_type = "application"
+}
+
+resource "aws_lb_target_group" "lambda_target_group_1" {
+  name        = "lambda-target-group-1"
+  port        = 80
+  protocol    = "HTTP"
+  target_type = "lambda"
+}
+
+resource "aws_lb_target_group" "lambda_target_group_2" {
+  name        = "lambda-target-group-2"
+  port        = 80
+  protocol    = "HTTP"
+  target_type = "lambda"
+}
+
+resource "aws_lb_target_group" "lambda_target_group_3" {
+  name        = "lambda-target-group-3"
+  port        = 80
+  protocol    = "HTTP"
+  target_type = "lambda"
+}
+
+resource "aws_lb_listener" "example_listener" {
+  load_balancer_arn = aws_lb.example_alb.arn
+  port              = 80
+  protocol          = "HTTP"
+
+  default_action {
+    type             = "fixed-response"
+    fixed_response {
+      content_type = "text/plain"
+      message_body = "Default action"
+      status_code  = "200"
+    }
+  }
+}
+
+resource "aws_lb_listener_rule" "rule_1" {
+  listener_arn = aws_lb_listener.example_listener.arn
+  priority     = 100
+
+  action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.lambda_target_group_1.arn
+  }
+
+  condition {
+    path_pattern {
+      values = ["/function1/*"]
+    }
+  }
+}
+
+resource "aws_lb_listener_rule" "rule_2" {
+  listener_arn = aws_lb_listener.example_listener.arn
+  priority     = 200
+
+  action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.lambda_target_group_2.arn
+  }
+
+  condition {
+    path_pattern {
+      values = ["/function2/*"]
+    }
+  }
+}
+
+resource "aws_lb_listener_rule" "rule_3" {
+  listener_arn = aws_lb_listener.example_listener.arn
+  priority     = 300
+
+  action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.lambda_target_group_3.arn
+  }
+
+  condition {
+    path_pattern {
+      values = ["/function3/*"]
+    }
+  }
+}
