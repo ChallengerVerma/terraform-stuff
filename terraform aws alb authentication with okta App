@@ -1,0 +1,111 @@
+# Define the Okta provider
+provider "okta" {
+  org_name  = "<your_okta_organization_name>"
+  api_token = "<your_okta_api_token>"
+}
+
+# Create an Okta OpenID Connect application
+resource "okta_app_openid_connect" "example_app" {
+  name              = "Example App"
+  label             = "example-app"
+  client_id         = "example-client-id"
+  redirect_uris     = ["https://example-app.com/callback"]
+  post_logout_uris  = ["https://example-app.com/logout"]
+  grant_types       = ["authorization_code", "refresh_token"]
+  response_types    = ["code"]
+  application_type  = "web"
+  consent_method    = "IMPLICIT"
+  token_endpoint_auth_method = "client_secret_basic"
+}
+
+# Create an AWS Application Load Balancer
+resource "aws_lb" "example_alb" {
+  name               = "example-alb"
+  load_balancer_type = "application"
+  security_groups    = [aws_security_group.example_sg.id]
+  subnets            = [aws_subnet.example_subnet.id]
+}
+
+# Create an AWS ALB listener
+resource "aws_lb_listener" "example_listener" {
+  load_balancer_arn = aws_lb.example_alb.arn
+  port              = 80
+  protocol          = "HTTP"
+
+  default_action {
+    type            = "authenticate-oidc"
+    authenticate_oidc {
+      issuer                                = okta_app_openid_connect.example_app.issuer
+      authorization_endpoint                = okta_app_openid_connect.example_app.authorization_endpoint
+      token_endpoint                        = okta_app_openid_connect.example_app.token_endpoint
+      user_info_endpoint                    = okta_app_openid_connect.example_app.userinfo_endpoint
+      logout_endpoint                       = okta_app_openid_connect.example_app.logout_endpoint
+      client_id                             = okta_app_openid_connect.example_app.client_id
+      client_secret                         = okta_app_openid_connect.example_app.client_secret
+      session_cookie_name                   = "example-session-cookie"
+      session_timeout                       = "604800"
+      on_unauthenticated_request            = "authenticate"
+      session_timeout_parameter_name        = "example-session-timeout"
+      authentication_request_extra_params   = { "response_mode" = "query" }
+      authentication_request_extra_scopes   = ["email", "profile", "openid"]
+      authentication_request_conditional_scopes = ["groups"]
+    }
+  }
+}
+
+# Create an AWS ALB target group
+resource "aws_lb_target_group" "example_target_group" {
+  name     = "example-target-group"
+  port     = 80
+  protocol = "HTTP"
+  vpc_id   = aws_vpc.example_vpc.id
+}
+
+# Create an AWS ALB listener rule to forward traffic to the target group
+resource "aws_lb_listener_rule" "example_listener_rule" {
+  listener_arn = aws_lb_listener.example_listener.arn
+  priority     = 100
+
+  action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.example_target_group.arn
+  }
+
+  condition {
+    field  = "path-pattern"
+    values = ["/"]
+  }
+}
+
+# Create an AWS ALB security group
+resource "aws_security_group" "example_sg" {
+  name        = "example-sg"
+  description = "Example security group for the ALB"
+
+  ingress {
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+}
+
+# Create an AWS VPC
+resource "aws_vpc" "example_vpc" {
+  cidr_block = "10.0.0.0/16"
+}
+
+# Create an AWS subnet
+resource "aws_subnet" "example_subnet" {
+  vpc_id                  = aws_vpc.example_vpc.id
+  cidr_block              = "10.0.0.0/24"
+  availability_zone       = "us-west-2a"
+  map_public_ip_on_launch = true
+}
