@@ -1,0 +1,52 @@
+provider "aws" {
+  region = "us-west-2"  # Update with your desired region
+}
+
+# Define the ECS task definitions for the existing tasks
+resource "aws_ecs_task_definition" "existing_task_1" {
+  # Your existing task definition configuration
+}
+
+resource "aws_ecs_task_definition" "existing_task_2" {
+  # Your existing task definition configuration
+}
+
+# EventBridge rule to trigger the tasks at 3 AM PST
+resource "aws_cloudwatch_event_rule" "schedule_rule" {
+  name                = "ecs-schedule-rule"
+  schedule_expression = "cron(0 3 * * ? *)"  # Schedule for 3 AM PST (adjust as needed)
+}
+
+# EventBridge target for the first ECS task
+resource "aws_cloudwatch_event_target" "first_ecs_task_target" {
+  rule      = aws_cloudwatch_event_rule.schedule_rule.name
+  target_id = "first-ecs-task-target"
+  arn       = aws_ecs_task_definition.existing_task_1.arn
+  ecs_target {
+    task_count        = 2  # Number of tasks to run
+    launch_type       = "FARGATE"  # Or "EC2" if using EC2 launch type
+    platform_version  = "1.4.0"  # Fargate platform version
+    network_configuration {
+      subnets          = ["subnet-12345678"]  # Update with your subnet ID(s)
+      security_groups  = ["sg-12345678"]  # Update with your security group ID(s)
+      assign_public_ip = true  # Set to true if using Fargate with public IP
+    }
+  }
+}
+
+# EventBridge target for the second ECS task
+resource "aws_cloudwatch_event_target" "second_ecs_task_target" {
+  rule      = aws_cloudwatch_event_rule.schedule_rule.name
+  target_id = "second-ecs-task-target"
+  arn       = aws_ecs_task_definition.existing_task_2.arn
+  ecs_target {
+    task_count        = 2  # Number of tasks to run
+    launch_type       = "FARGATE"  # Or "EC2" if using EC2 launch type
+    platform_version  = "1.4.0"  # Fargate platform version
+    network_configuration {
+      subnets          = ["subnet-12345678"]  # Update with your subnet ID(s)
+      security_groups  = ["sg-12345678"]  # Update with your security group ID(s)
+      assign_public_ip = true  # Set to true if using Fargate with public IP
+    }
+  }
+}
