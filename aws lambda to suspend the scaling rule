@@ -1,0 +1,45 @@
+import boto3
+
+def lambda_handler(event, context):
+    # Initialize ECS client
+    ecs_client = boto3.client('ecs')
+
+    # Define the ECS service and cluster
+    cluster_name = 'your-cluster-name'
+    service_name = 'your-service-name'
+
+    # List existing scaling policies
+    response = ecs_client.describe_scaling_policies(
+        serviceNamespace='ecs',
+        resourceId=f'service/{cluster_name}/{service_name}'
+    )
+
+    # Identify the policy to suspend (e.g., by name)
+    for policy in response['ScalingPolicies']:
+        if policy['PolicyName'] == 'your-policy-to-suspend':
+            # Suspend the policy by deleting it
+            ecs_client.delete_scaling_policy(
+                serviceNamespace='ecs',
+                resourceID=f'service/{cluster_name}/{service_name}',
+                policyName=policy['PolicyName']
+            )
+            print(f"Suspended policy: {policy['PolicyName']}")
+
+    # Create or update the new scaling policy
+    ecs_client.put_scaling_policy(
+        serviceNamespace='ecs',
+        resourceID=f'service/{cluster_name}/{service_name}',
+        policyName='new-policy-name',
+        policyType='TargetTrackingScaling',
+        targetTrackingScalingPolicyConfiguration={
+            'PredefinedMetricSpecification': {
+                'PredefinedMetricType': 'ECSServiceAverageCPUUtilization'
+            },
+            'TargetValue': 70
+        }
+    )
+
+    return {
+        'statusCode': 200,
+        'body': 'Scaling policies updated successfully'
+    }
