@@ -1,0 +1,53 @@
+resource "aws_ssm_document" "ecs_task_automation_document" {
+  name          = "ecs-task-automation"
+  document_type = "Automation"
+
+  content = <<EOF
+{
+  "schemaVersion": "0.3",
+  "description": "Automation document to run ECS tasks",
+  "assumeRole": "{{ AutomationAssumeRole }}",
+  "parameters": {
+    "ClusterName": {
+      "type": "String",
+      "description": "The name of the ECS cluster"
+    },
+    "TaskDefinitionArn": {
+      "type": "String",
+      "description": "The ARN of the ECS task definition to run"
+    },
+    "Count": {
+      "type": "String",
+      "description": "The number of tasks to run"
+    }
+    // Add other parameters as needed
+  },
+  "mainSteps": [
+    {
+      "name": "RunEcsTask",
+      "action": "aws:executeAwsApi",
+      "inputs": {
+        "Service": "ECS",
+        "Action": "runTask",
+        "Cluster": "{{ ClusterName }}",
+        "TaskDefinition": "{{ TaskDefinitionArn }}",
+        "Count": "{{ Count }}"
+        // Add other inputs as needed
+      }
+    }
+  ]
+}
+EOF
+}
+
+resource "aws_scheduler_schedule" "ecs_task_schedule" {
+  name        = "ecs-task-schedule"
+  description = "Schedule for running ECS tasks"
+
+  targets {
+    key      = "AutomationId"
+    values   = [aws_ssm_document.ecs_task_automation_document.name]
+  }
+
+  schedule_expression = "cron(0 8 * * ? *)"  # Runs daily at 8:00 AM UTC
+}
