@@ -1,0 +1,92 @@
+# Create ALB
+resource "aws_lb" "example_alb" {
+  name               = "example-alb"
+  internal           = false
+  load_balancer_type = "application"
+  subnets            = ["subnet-12345678", "subnet-87654321"]
+  security_groups    = ["sg-abcdef01"]
+
+  enable_deletion_protection = false
+
+  tags = {
+    Name = "example-alb"
+  }
+}
+
+# Define a list of standalone task definitions
+locals {
+  standalone_tasks = [
+    {
+      name     = "standalone-task-1"
+      port     = 8080
+      protocol = "HTTP"
+    },
+    {
+      name     = "standalone-task-2"
+      port     = 8081
+      protocol = "HTTP"
+    },
+    {
+      name     = "standalone-task-3"
+      port     = 8082
+      protocol = "HTTP"
+    },
+    {
+      name     = "standalone-task-4"
+      port     = 8083
+      protocol = "HTTP"
+    },
+    {
+      name     = "standalone-task-5"
+      port     = 8084
+      protocol = "HTTP"
+    },
+    {
+      name     = "standalone-task-6"
+      port     = 8085
+      protocol = "HTTP"
+    }
+  ]
+}
+
+# Create ALB Target Groups for standalone tasks
+resource "aws_lb_target_group" "standalone_target_groups" {
+  count = length(local.standalone_tasks)
+
+  name     = "standalone-target-group-${count.index + 1}"
+  port     = local.standalone_tasks[count.index].port
+  protocol = local.standalone_tasks[count.index].protocol
+  vpc_id   = "vpc-12345678"
+
+  health_check {
+    path                = "/"
+    protocol            = "HTTP"
+    port                = "traffic-port"
+    healthy_threshold   = 2
+    unhealthy_threshold = 2
+    timeout             = 3
+    interval            = 5
+  }
+
+  tags = {
+    Name = "standalone-target-group-${count.index + 1}"
+  }
+}
+
+# Define ALB Listener Rules for standalone tasks
+resource "aws_lb_listener_rule" "standalone_listener_rules" {
+  count        = length(local.standalone_tasks)
+  listener_arn = aws_lb.example_alb.arn
+  priority     = 90 + count.index
+
+  action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.standalone_target_groups[count.index].arn
+  }
+
+  condition {
+    host_header {
+      values = ["example.com"]
+    }
+  }
+}
