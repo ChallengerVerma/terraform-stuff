@@ -1,0 +1,42 @@
+provider "aws" {
+  region = "us-east-1" # Change this to your desired region
+}
+
+# DynamoDB Table
+resource "aws_dynamodb_table" "my_table" {
+  name           = "my-table"
+  billing_mode   = "PROVISIONED"
+  read_capacity  = 10 # Initial RCU
+  write_capacity = 10 # Initial WCU
+
+  attribute {
+    name = "PK"
+    type = "S"
+  }
+
+  hash_key = "PK"
+}
+
+# Auto Scaling Target
+resource "aws_autoscaling_target" "my_table_target" {
+  max_capacity       = 100 # Max RCU/WCU
+  min_capacity       = 5   # Min RCU/WCU
+  resource_id        = aws_dynamodb_table.my_table.name
+  scalable_dimension = "dynamodb:table:WriteCapacityUnits"
+  service_namespace  = "dynamodb"
+}
+
+# Auto Scaling Policy
+resource "aws_appautoscaling_policy" "my_table_policy" {
+  name               = "my-table-policy"
+  policy_type        = "TargetTrackingScaling"
+  resource_id        = aws_autoscaling_target.my_table_target.resource_id
+  scalable_dimension = aws_autoscaling_target.my_table_target.scalable_dimension
+  service_namespace  = aws_autoscaling_target.my_table_target.service_namespace
+  target_tracking_scaling_policy_configuration {
+    predefined_metric_specification {
+      predefined_metric_type = "DynamoDBWriteCapacityUtilization"
+    }
+    target_value             = 70 # Target utilization percentage
+  }
+}
