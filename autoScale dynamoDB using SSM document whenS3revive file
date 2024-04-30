@@ -1,0 +1,123 @@
+provider "aws" {
+  region = "us-east-1" # Change this to your desired region
+}
+
+# S3 Bucket
+resource "aws_s3_bucket" "my_bucket" {
+  bucket = "my-bucket-name" # Replace with your bucket name
+  acl    = "private"
+}
+
+# SNS Topic
+resource "aws_sns_topic" "my_topic" {
+  name = "my-topic-name" # Replace with your topic name
+}
+
+# SNS Topic Subscription
+resource "aws_sns_topic_subscription" "my_topic_subscription" {
+  topic_arn = aws_sns_topic.my_topic.arn
+  protocol  = "lambda"
+  endpoint  = aws_lambda_function.my_lambda_function.arn
+}
+
+# CloudWatch Events Rule for S3 Events
+resource "aws_cloudwatch_event_rule" "my_event_rule" {
+  name        = "my-event-rule"
+  description = "Trigger Step Functions on S3 events"
+  event_pattern = jsonencode({
+    source      = ["aws.s3"],
+    detail      = {
+      eventSource    = ["s3.amazonaws.com"],
+      eventName      = ["ObjectCreated:*"],
+      requestParameters = {
+        bucketName = [aws_s3_bucket.my_bucket.id],
+      },
+    },
+  })
+}
+
+# CloudWatch Events Target for Step Functions
+resource "aws_cloudwatch_event_target" "my_event_target" {
+  rule = aws_cloudwatch_event_rule.my_event_rule.name
+  arn  = aws_sfn_state_machine.my_state_machine.arn
+}
+
+# Step Functions State Machine
+resource "aws_sfn_state_machine" "my_state_machine" {
+  name     = "my-state-machine"
+  role_arn = aws_iam_role.my_step_functions_role.arn
+  definition = <<EOF
+{
+  "Comment": "Adjust DynamoDB capacity based on S3 events",
+  "StartAt": "AdjustDynamoDBCapacity",
+  "States": {
+    "AdjustDynamoDBCapacity": {
+      "Type": "Task",
+      "Resource": "arn:aws:ssm:us-east-1:123456789012:automation-doc-name",
+      "End": true
+    }
+  }
+}
+EOF
+}
+
+# IAM Role for Step Functions
+resource "aws_iam_role" "my_step_functions_role" {
+  name = "my-step-functions-role"
+
+  assume_role_policy = jsonencode({
+    "Version": "2012-10-17",
+    "Statement": [{
+      "Effect": "Allow",
+      "Principal": {
+        "Service": "states.amazonaws.com"
+      },
+      "Action": "sts:AssumeRole"
+    }]
+  })
+
+  # Attach policies as needed
+}
+
+# Systems Manager Automation Document
+resource "aws_ssm_document" "my_automation_document" {
+  name          = "my-automation-doc"
+  document_type = "Automation"
+
+  content = <<EOF
+{
+  "schemaVersion": "0.3",
+  "description": "Adjust DynamoDB capacity based on S3 events",
+  "assumeRole": "{{AutomationAssumeRole}}",
+  "parameters": {
+    "DynamoDBTableName": {
+      "type": "String",
+      "description": "The name of the DynamoDB table to adjust capacity for"
+    },
+    "WCU": {
+      "type": "String",
+      "description": "The desired Write Capacity Units (WCU)"
+    },
+    "RCU": {
+      "type": "String",
+      "description": "The desired Read Capacity Units (RCU)"
+    }
+  },
+  "mainSteps": [
+    {
+      "action": "aws:executeAwsApi",
+      "name": "AdjustDynamoDBCapacity",
+      "inputs": {
+        "Service": "DynamoDB",
+        "Api": "updateTable",
+        "Table": "{{DynamoDBTableName}}",
+        "ProvisionedThroughput": {
+          "WriteCapacityUnits": "{{WCU}}",
+          "ReadCapacityUnits": "{{RCU}}"
+        }
+      }
+    }
+  ]
+}
+EOF
+}
